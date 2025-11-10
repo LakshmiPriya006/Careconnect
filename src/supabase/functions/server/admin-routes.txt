@@ -1,0 +1,339 @@
+// ============ ROLE AND PERMISSION ROUTES ============
+
+// Get all roles
+app.get('/make-server-de4eab6a/admin/roles', async (c) => {
+  try {
+    const user = await verifyUser(c.req.header('Authorization'));
+    if (!user) return c.json({ error: 'Unauthorized' }, 401);
+
+    let roles = await kv.get('admin_roles');
+    
+    if (!roles) {
+      // Initialize with system roles
+      const systemRoles = [
+        {
+          id: 'super_admin',
+          name: 'Super Admin',
+          description: 'Full access to all features and settings. Can manage admin team and roles.',
+          isSystemRole: true,
+          permissions: ['view_dashboard', 'view_analytics', 'view_users', 'edit_users', 'delete_users', 'suspend_users', 'view_providers', 'edit_providers', 'verify_providers', 'suspend_providers', 'view_requests', 'manage_requests', 'assign_providers', 'cancel_requests', 'view_emergencies', 'manage_emergencies', 'respond_emergencies', 'view_payments', 'manage_payments', 'process_refunds', 'view_financial_reports', 'view_settings', 'manage_settings', 'manage_integrations', 'view_admin_team', 'manage_admin_team', 'manage_roles', 'assign_roles'],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        {
+          id: 'admin',
+          name: 'Admin',
+          description: 'Can manage users, providers, and service requests. Cannot modify settings or admin team.',
+          isSystemRole: true,
+          permissions: ['view_dashboard', 'view_analytics', 'view_users', 'edit_users', 'suspend_users', 'view_providers', 'edit_providers', 'verify_providers', 'suspend_providers', 'view_requests', 'manage_requests', 'assign_providers', 'cancel_requests', 'view_emergencies', 'manage_emergencies', 'respond_emergencies', 'view_payments', 'manage_payments'],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        {
+          id: 'moderator',
+          name: 'Moderator',
+          description: 'Can view and manage service requests and emergencies. Limited user management.',
+          isSystemRole: true,
+          permissions: ['view_dashboard', 'view_users', 'view_providers', 'view_requests', 'manage_requests', 'assign_providers', 'view_emergencies', 'manage_emergencies', 'respond_emergencies', 'view_payments'],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        {
+          id: 'support',
+          name: 'Support Agent',
+          description: 'Can view data and respond to emergencies. Cannot make changes to users or settings.',
+          isSystemRole: true,
+          permissions: ['view_dashboard', 'view_users', 'view_providers', 'view_requests', 'view_emergencies', 'respond_emergencies', 'view_payments'],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        {
+          id: 'viewer',
+          name: 'Viewer',
+          description: 'Read-only access to dashboard and reports. Cannot make any changes.',
+          isSystemRole: true,
+          permissions: ['view_dashboard', 'view_analytics', 'view_users', 'view_providers', 'view_requests', 'view_emergencies', 'view_payments', 'view_financial_reports'],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      ];
+      await kv.set('admin_roles', systemRoles);
+      roles = systemRoles;
+    }
+
+    return c.json({ roles });
+  } catch (error) {
+    console.log('Error fetching roles:', error);
+    return c.json({ error: 'Failed to fetch roles' }, 500);
+  }
+});
+
+// Create custom role
+app.post('/make-server-de4eab6a/admin/roles', async (c) => {
+  try {
+    const user = await verifyUser(c.req.header('Authorization'));
+    if (!user) return c.json({ error: 'Unauthorized' }, 401);
+
+    const roleData = await c.req.json();
+    
+    const roles = await kv.get('admin_roles') || [];
+    
+    const newRole = {
+      id: `custom_${Date.now()}`,
+      name: roleData.name,
+      description: roleData.description,
+      permissions: roleData.permissions || [],
+      isSystemRole: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      createdBy: user.id,
+    };
+    
+    roles.push(newRole);
+    await kv.set('admin_roles', roles);
+    
+    return c.json({ success: true, role: newRole });
+  } catch (error) {
+    console.log('Error creating role:', error);
+    return c.json({ error: 'Failed to create role' }, 500);
+  }
+});
+
+// Update role
+app.put('/make-server-de4eab6a/admin/roles/:roleId', async (c) => {
+  try {
+    const user = await verifyUser(c.req.header('Authorization'));
+    if (!user) return c.json({ error: 'Unauthorized' }, 401);
+
+    const roleId = c.req.param('roleId');
+    const roleData = await c.req.json();
+    
+    const roles = await kv.get('admin_roles') || [];
+    const roleIndex = roles.findIndex((r: any) => r.id === roleId);
+    
+    if (roleIndex === -1) {
+      return c.json({ error: 'Role not found' }, 404);
+    }
+    
+    if (roles[roleIndex].isSystemRole) {
+      return c.json({ error: 'Cannot modify system roles' }, 400);
+    }
+    
+    roles[roleIndex] = {
+      ...roles[roleIndex],
+      name: roleData.name || roles[roleIndex].name,
+      description: roleData.description || roles[roleIndex].description,
+      permissions: roleData.permissions || roles[roleIndex].permissions,
+      updatedAt: new Date().toISOString(),
+      updatedBy: user.id,
+    };
+    
+    await kv.set('admin_roles', roles);
+    
+    return c.json({ success: true, role: roles[roleIndex] });
+  } catch (error) {
+    console.log('Error updating role:', error);
+    return c.json({ error: 'Failed to update role' }, 500);
+  }
+});
+
+// Delete role
+app.delete('/make-server-de4eab6a/admin/roles/:roleId', async (c) => {
+  try {
+    const user = await verifyUser(c.req.header('Authorization'));
+    if (!user) return c.json({ error: 'Unauthorized' }, 401);
+
+    const roleId = c.req.param('roleId');
+    
+    const roles = await kv.get('admin_roles') || [];
+    const role = roles.find((r: any) => r.id === roleId);
+    
+    if (!role) {
+      return c.json({ error: 'Role not found' }, 404);
+    }
+    
+    if (role.isSystemRole) {
+      return c.json({ error: 'Cannot delete system roles' }, 400);
+    }
+    
+    const filteredRoles = roles.filter((r: any) => r.id !== roleId);
+    await kv.set('admin_roles', filteredRoles);
+    
+    return c.json({ success: true });
+  } catch (error) {
+    console.log('Error deleting role:', error);
+    return c.json({ error: 'Failed to delete role' }, 500);
+  }
+});
+
+// Get all admin users
+app.get('/make-server-de4eab6a/admin/team', async (c) => {
+  try {
+    const user = await verifyUser(c.req.header('Authorization'));
+    if (!user) return c.json({ error: 'Unauthorized' }, 401);
+
+    const adminUsers = await kv.get('admin_users') || [];
+    const roles = await kv.get('admin_roles') || [];
+    
+    // Add role names to users
+    const usersWithRoles = adminUsers.map((u: any) => {
+      const role = roles.find((r: any) => r.id === u.roleId);
+      return {
+        ...u,
+        roleName: role ? role.name : 'Unknown',
+      };
+    });
+    
+    return c.json({ users: usersWithRoles });
+  } catch (error) {
+    console.log('Error fetching admin users:', error);
+    return c.json({ error: 'Failed to fetch admin users' }, 500);
+  }
+});
+
+// Create admin user
+app.post('/make-server-de4eab6a/admin/team', async (c) => {
+  try {
+    const user = await verifyUser(c.req.header('Authorization'));
+    if (!user) return c.json({ error: 'Unauthorized' }, 401);
+
+    const userData = await c.req.json();
+    
+    const adminUsers = await kv.get('admin_users') || [];
+    const roles = await kv.get('admin_roles') || [];
+    
+    // Check if email already exists
+    const existingUser = adminUsers.find((u: any) => u.email === userData.email);
+    if (existingUser) {
+      return c.json({ error: 'Email already exists' }, 400);
+    }
+    
+    // Verify role exists
+    const role = roles.find((r: any) => r.id === userData.roleId);
+    if (!role) {
+      return c.json({ error: 'Invalid role' }, 400);
+    }
+    
+    const newUser = {
+      id: `admin_${Date.now()}`,
+      email: userData.email,
+      name: userData.name,
+      roleId: userData.roleId,
+      roleName: role.name,
+      status: 'active',
+      createdAt: new Date().toISOString(),
+      createdBy: user.id,
+    };
+    
+    adminUsers.push(newUser);
+    await kv.set('admin_users', adminUsers);
+    
+    return c.json({ success: true, user: newUser });
+  } catch (error) {
+    console.log('Error creating admin user:', error);
+    return c.json({ error: 'Failed to create admin user' }, 500);
+  }
+});
+
+// Update admin user
+app.put('/make-server-de4eab6a/admin/team/:userId', async (c) => {
+  try {
+    const user = await verifyUser(c.req.header('Authorization'));
+    if (!user) return c.json({ error: 'Unauthorized' }, 401);
+
+    const userId = c.req.param('userId');
+    const userData = await c.req.json();
+    
+    const adminUsers = await kv.get('admin_users') || [];
+    const roles = await kv.get('admin_roles') || [];
+    const userIndex = adminUsers.findIndex((u: any) => u.id === userId);
+    
+    if (userIndex === -1) {
+      return c.json({ error: 'User not found' }, 404);
+    }
+    
+    if (userData.roleId) {
+      const role = roles.find((r: any) => r.id === userData.roleId);
+      if (!role) {
+        return c.json({ error: 'Invalid role' }, 400);
+      }
+      adminUsers[userIndex].roleId = userData.roleId;
+      adminUsers[userIndex].roleName = role.name;
+    }
+    
+    if (userData.name) adminUsers[userIndex].name = userData.name;
+    if (userData.status) adminUsers[userIndex].status = userData.status;
+    adminUsers[userIndex].updatedAt = new Date().toISOString();
+    adminUsers[userIndex].updatedBy = user.id;
+    
+    await kv.set('admin_users', adminUsers);
+    
+    return c.json({ success: true, user: adminUsers[userIndex] });
+  } catch (error) {
+    console.log('Error updating admin user:', error);
+    return c.json({ error: 'Failed to update admin user' }, 500);
+  }
+});
+
+// Delete admin user
+app.delete('/make-server-de4eab6a/admin/team/:userId', async (c) => {
+  try {
+    const user = await verifyUser(c.req.header('Authorization'));
+    if (!user) return c.json({ error: 'Unauthorized' }, 401);
+
+    const userId = c.req.param('userId');
+    
+    const adminUsers = await kv.get('admin_users') || [];
+    const filteredUsers = adminUsers.filter((u: any) => u.id !== userId);
+    
+    if (filteredUsers.length === adminUsers.length) {
+      return c.json({ error: 'User not found' }, 404);
+    }
+    
+    await kv.set('admin_users', filteredUsers);
+    
+    return c.json({ success: true });
+  } catch (error) {
+    console.log('Error deleting admin user:', error);
+    return c.json({ error: 'Failed to delete admin user' }, 500);
+  }
+});
+
+// Get current admin user with permissions
+app.get('/make-server-de4eab6a/admin/me', async (c) => {
+  try {
+    const user = await verifyUser(c.req.header('Authorization'));
+    if (!user) return c.json({ error: 'Unauthorized' }, 401);
+
+    const adminUsers = await kv.get('admin_users') || [];
+    const roles = await kv.get('admin_roles') || [];
+    
+    const adminUser = adminUsers.find((u: any) => u.id === user.id);
+    
+    if (!adminUser) {
+      // Return default super admin for first user
+      const superAdminRole = roles.find((r: any) => r.id === 'super_admin');
+      return c.json({
+        user: {
+          id: user.id,
+          email: user.email,
+          name: 'Admin User',
+          roleId: 'super_admin',
+          roleName: 'Super Admin',
+          status: 'active',
+        },
+        permissions: superAdminRole ? superAdminRole.permissions : [],
+      });
+    }
+    
+    const role = roles.find((r: any) => r.id === adminUser.roleId);
+    
+    return c.json({
+      user: adminUser,
+      permissions: role ? role.permissions : [],
+    });
+  } catch (error) {
+    console.log('Error fetching current admin user:', error);
+    return c.json({ error: 'Failed to fetch user info' }, 500);
+  }
+});
