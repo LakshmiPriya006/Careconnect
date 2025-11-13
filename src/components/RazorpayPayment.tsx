@@ -63,7 +63,7 @@ export function RazorpayPayment({
 
     try {
       // Create Razorpay order via backend
-      const response = await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-de4eab6a/create-razorpay-order`, {
+      const response = await fetch(`https://${projectId}.supabase.co/functions/v1/server/create-razorpay-order`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

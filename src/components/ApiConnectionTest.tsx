@@ -18,7 +18,7 @@ export function ApiConnectionTest() {
 
     try {
       // Test 1: Health Check
-      const healthUrl = `https://${projectId}.supabase.co/functions/v1/make-server-de4eab6a/health`;
+      const healthUrl = `https://${projectId}.supabase.co/functions/v1/server/health`;
       testResults.healthUrl = healthUrl;
       
       try {
@@ -44,7 +44,7 @@ export function ApiConnectionTest() {
       }
 
       // Test 2: Check Admin Endpoint
-      const adminCheckUrl = `https://${projectId}.supabase.co/functions/v1/make-server-de4eab6a/auth/check-admin`;
+      const adminCheckUrl = `https://${projectId}.supabase.co/functions/v1/server/auth/check-admin`;
       
       try {
         const adminResponse = await fetch(adminCheckUrl, {
@@ -69,7 +69,7 @@ export function ApiConnectionTest() {
       }
 
       // Test 3: Services Endpoint
-      const servicesUrl = `https://${projectId}.supabase.co/functions/v1/make-server-de4eab6a/services`;
+      const servicesUrl = `https://${projectId}.supabase.co/functions/v1/server/services`;
       
       try {
         const servicesResponse = await fetch(servicesUrl, {

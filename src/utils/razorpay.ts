@@ -23,7 +23,7 @@ export function loadRazorpayScript(): Promise<boolean> {
 export async function getRazorpayKeyId(): Promise<string | null> {
   try {
     const response = await fetch(
-      `https://${projectId}.supabase.co/functions/v1/make-server-de4eab6a/payment/razorpay-key`,
+      `https://${projectId}.supabase.co/functions/v1/server/payment/razorpay-key`,
       {
         headers: {
           Authorization: `Bearer ${publicAnonKey}`,
@@ -83,7 +83,7 @@ export async function initiateRazorpayPayment(options: {
           // Verify payment on server
           const accessToken = localStorage.getItem('access_token');
           const verifyResponse = await fetch(
-            `https://${projectId}.supabase.co/functions/v1/make-server-de4eab6a/payment/razorpay-verify`,
+            `https://${projectId}.supabase.co/functions/v1/server/payment/razorpay-verify`,
             {
               method: 'POST',
               headers: {

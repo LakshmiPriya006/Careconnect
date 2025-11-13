@@ -69,7 +69,7 @@ export function ClientSignupFlow({ onSuccess, onBack }: ClientSignupFlowProps) {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
@@ -89,38 +89,32 @@ export function ClientSignupFlow({ onSuccess, onBack }: ClientSignupFlowProps) {
     }
 
     try {
-      // Use direct Supabase Auth signup (bypasses custom server endpoint)
-      const { createClient } = await import('../utils/supabase/client');
-      const supabase = createClient();
+      console.log('🔐 Calling custom backend signup API...');
       
-      console.log('🔐 Creating user account with Supabase Auth...');
-      const { data, error } = await supabase.auth.signUp({
+      // This calls your POST /auth/signup/client endpoint
+      const result = await auth.signUpClient({
         email: formData.email,
         password: formData.password,
-        options: {
-          data: {
-            name: formData.name,
-            phone: formData.phone,
-            role: 'client',
-          },
-          emailRedirectTo: undefined // Disable email verification for development
-        }
+        name: formData.name,
+        phone: formData.phone,
+        address: formData.address,
+        // NOTE: Your backend route requires a 'city'.
+        // I'm adding a placeholder. You should add a 'city' field to your form.
+        city: formData.address.split(',')[1]?.trim() || "Unknown", 
+        age: formData.age,
+        gender: formData.gender,
       });
 
-      if (error) {
-        console.error('❌ Supabase Auth error:', error);
-        throw error;
+      console.log('✅ Backend signup successful:', result);
+
+      if (result.success && result.user) {
+        // Call onSuccess to trigger login with the new credentials
+        onSuccess(formData.email, formData.password, formData.name);
+      } else {
+        // Use the error message from the backend if available
+        throw new Error(result.error || 'Signup failed');
       }
 
-      console.log('✅ User account created:', data.user?.id);
-      
-      // TODO: Save client data to SQL tables when tables are ready
-      // For now, just proceed with login
-      
-      if (data.user) {
-        // Call onSuccess to trigger login
-        onSuccess(formData.email, formData.password, formData.name);
-      }
     } catch (err: any) {
       console.error('Signup error:', err);
       

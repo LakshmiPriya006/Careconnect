@@ -33,8 +33,8 @@ function deriveProjectIdFromUrl(url?: string) {
 	}
 }
 
-export const projectId = _env.VITE_SUPABASE_PROJECT_ID ?? deriveProjectIdFromUrl(_env.VITE_SUPABASE_URL) ?? "hmjlivtxnwyitogquflp";
-export const publicAnonKey = _env.VITE_SUPABASE_ANON_KEY ?? "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhtamxpdnR4bnd5aXRvZ3F1ZmxwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIxMzU5MTIsImV4cCI6MjA3NzcxMTkxMn0.msPlKrV6X7g-o-So2rudIJR78LlmSfYjpk09hzEMGz4";
+export const projectId = _env.VITE_SUPABASE_PROJECT_ID ?? deriveProjectIdFromUrl(_env.VITE_SUPABASE_URL) ?? "zypsbvzpbypsaazinoqe";
+export const publicAnonKey = _env.VITE_SUPABASE_ANON_KEY ?? "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp5cHNidnpwYnlwc2Fhemlub3FlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI3NzA5MTYsImV4cCI6MjA3ODM0NjkxNn0.OO4yCx0Nr6vXIay0IS9HR_UApLcU-zVQSCXhCAwuqd0";
 
 // Optional: export full URL if VITE_SUPABASE_URL provided
 export const supabaseUrl = _env.VITE_SUPABASE_URL ?? `https://${projectId}.supabase.co`;
