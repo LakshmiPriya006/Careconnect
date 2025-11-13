@@ -1,7 +1,14 @@
 import { projectId, publicAnonKey } from './supabase/info';
 import { createClient } from './supabase/client';
 
-const BASE_URL = `https://${projectId}.supabase.co/functions/v1/make-server-de4eab6a`;
+// SINGLE PROJECT APPROACH: Use test project for everything (auth + API + database)
+// Much cleaner and simpler configuration!
+const BASE_URL = `https://${projectId}.supabase.co/functions/v1/server`;
+
+console.log('🔧 [API] Using single project setup:');
+console.log('🔧 [API] Project ID:', projectId);
+console.log('🔧 [API] BASE_URL:', BASE_URL);
+console.log('🔧 [API] Auth, API, and Database all in one project!');
 
 // Helper function to get a fresh access token
 async function getFreshToken(): Promise<string | null> {
@@ -92,7 +99,7 @@ export async function apiRequest(endpoint: string, options: RequestInit = {}) {
       : '[short token]';
     console.log(`🔑 [${endpoint}] Using token: ${tokenPreview}`);
   } else if (!token && isPublicEndpoint) {
-    console.log(`🌐 [${endpoint}] Public endpoint, using anon key`);
+    console.log(`🌐 [${endpoint}] Public endpoint, using original project anon key`);
   }
   
   try {
@@ -181,6 +188,12 @@ export const auth = {
 
 // Client API
 export const client = {
+  forceCreate: async () => {
+    return apiRequest('/client/force-create', {
+      method: 'POST',
+    });
+  },
+
   createRequest: async (data: any) => {
     return apiRequest('/requests/create', {
       method: 'POST',
@@ -302,12 +315,8 @@ export const client = {
     });
   },
 
-  // Service listing
-  getServices: async () => {
-    return apiRequest('/services', {
-      method: 'GET',
-    });
-  },
+  // Service listing (removed duplicate)
+  // getServices: already defined above in line ~200
 
   // Detail pages
   getClientById: async (clientId: string) => {
@@ -384,7 +393,7 @@ export const client = {
   },
 
   // Location tracking
-  updateLocation: async (bookingId: string, latitude: number, longitude: number) => {
+  updateBookingLocation: async (bookingId: string, latitude: number, longitude: number) => {
     return apiRequest(`/client/location/${bookingId}`, {
       method: 'POST',
       body: JSON.stringify({ latitude, longitude }),
@@ -412,7 +421,7 @@ export const provider = {
     });
   },
 
-  updateLocation: async (bookingId: string, latitude: number, longitude: number) => {
+  updateProviderLocation: async (bookingId: string, latitude: number, longitude: number) => {
     return apiRequest(`/provider/location/${bookingId}`, {
       method: 'POST',
       body: JSON.stringify({ latitude, longitude }),

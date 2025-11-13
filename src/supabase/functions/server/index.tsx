@@ -261,24 +261,70 @@ app.post('/make-server-de4eab6a/auth/signup/client', async (c) => {
 
     console.log('✅ Client user created in Supabase Auth:', data.user.id);
 
-    // Store additional client data in KV store
-    await kv.set(`user:${data.user.id}`, {
-      id: data.user.id,
-      email,
-      name,
-      phone,
-      address,
-      age: age || null,
-      gender: gender || null,
-      role: 'client',
-      favorites: [],
-      createdAt: new Date().toISOString(),
-    });
+    // Store additional client data in SQL database tables (migrated from KV)
+    const { error: dbError } = await supabaseAdmin
+      .from('clients')
+      .insert({
+        id: data.user.id,
+        auth_user_id: data.user.id,
+        email,
+        name,
+        phone,
+        phone_verified: false, // Could be verified during signup flow
+        metadata: {
+          age: age ? parseInt(age) : null,
+          gender: gender || null,
+          role: 'client',
+          signup_date: new Date().toISOString(),
+        }
+      });
+
+    if (dbError) {
+      console.log('❌ Error saving client to database:', dbError);
+      // Don't fail the whole signup - Auth user is created, just log the issue
+      console.log('⚠️ Client auth created but database save failed');
+    } else {
+      console.log('✅ Client data saved to database');
+    }
+
+    // If address provided, save to client_locations table
+    if (address) {
+      const { error: locationError } = await supabaseAdmin
+        .from('client_locations')
+        .insert({
+          client_id: data.user.id,
+          label: 'Home', 
+          address: { street: address }, // Store as JSONB
+          is_default: true,
+        });
+
+      if (locationError) {
+        console.log('❌ Error saving client location:', locationError);
+      } else {
+        console.log('✅ Client location saved to database');
+      }
+    }
+
+    // Create wallet account for new client
+    const { error: walletError } = await supabaseAdmin
+      .from('wallet_accounts')
+      .insert({
+        client_id: data.user.id,
+        balance: 0.00,
+        currency: 'INR',
+      });
+
+    if (walletError) {
+      console.log('❌ Error creating wallet account:', walletError);
+    } else {
+      console.log('✅ Wallet account created for client');
+    }
 
     return c.json({ success: true, user: data.user });
   } catch (error) {
     console.log('Error in client signup:', error);
     return c.json({ error: 'Failed to create account' }, 500);
+  }
   }
 });
 
@@ -487,9 +533,25 @@ app.get('/make-server-de4eab6a/bookings/client', async (c) => {
 
     console.log(`Fetching bookings for client ${user.id}`);
     
-    // Get client data to access favorites list
-    const clientData = await kv.get(`user:${user.id}`);
-    const favorites = clientData?.favorites || [];
+    // Get client data from SQL database
+    const { data: clientData, error: clientError } = await supabaseAdmin
+      .from('clients')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+
+    if (clientError) {
+      console.log('❌ Error fetching client data:', clientError);
+      return c.json({ error: 'Client not found' }, 404);
+    }
+
+    // Get client favorites from SQL database
+    const { data: favorites, error: favoritesError } = await supabaseAdmin
+      .from('favorites')
+      .select('provider_id')
+      .eq('client_id', user.id);
+
+    const favoriteProviderIds = favorites?.map(f => f.provider_id) || [];
     
     // Get all requests created by this client
     const allRequests = await kv.getByPrefix('request:');
@@ -588,19 +650,38 @@ app.get('/make-server-de4eab6a/client/profile', async (c) => {
     const user = await verifyUser(c.req.header('Authorization'));
     if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
-    const locationIds = await kv.getByPrefix(`client_location:${user.id}:`);
-    const locations = await Promise.all(
-      locationIds.map(async (id: string) => await kv.get(`location:${id}`))
-    );
+    // Get client data from SQL database
+    const { data: clientData, error: clientError } = await supabaseAdmin
+      .from('clients')
+      .select('*')
+      .eq('id', user.id)
+      .single();
 
-    const familyIds = await kv.getByPrefix(`client_family:${user.id}:`);
-    const familyMembers = await Promise.all(
-      familyIds.map(async (id: string) => await kv.get(`family:${id}`))
-    );
+    if (clientError) {
+      console.log('❌ Error fetching client data:', clientError);
+      return c.json({ error: 'Client not found' }, 404);
+    }
+
+    // Get client locations from SQL database
+    const { data: locations, error: locationsError } = await supabaseAdmin
+      .from('client_locations')
+      .select('*')
+      .eq('client_id', user.id)
+      .order('created_at', { ascending: false });
+
+    // Get family members from SQL database
+    const { data: familyMembers, error: familyError } = await supabaseAdmin
+      .from('family_members')
+      .select('*')
+      .eq('client_id', user.id)
+      .order('created_at', { ascending: false });
+
+    console.log(`✅ Client profile loaded for ${user.id} from SQL database`);
 
     return c.json({ 
-      locations: locations.filter(Boolean), 
-      familyMembers: familyMembers.filter(Boolean) 
+      client: clientData,
+      locations: locations || [], 
+      familyMembers: familyMembers || [] 
     });
   } catch (error) {
     console.log('Error fetching client profile:', error);
@@ -615,21 +696,29 @@ app.post('/make-server-de4eab6a/client/locations', async (c) => {
     if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
     const locationData = await c.req.json();
-    const locationId = `loc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Insert location into SQL table
+    const { data: newLocation, error } = await supabaseAdmin
+      .from('client_locations')
+      .insert({
+        client_id: user.id,
+        label: locationData.name || locationData.label,
+        address: typeof locationData.address === 'string' 
+          ? { street: locationData.address } 
+          : locationData.address,
+        is_default: locationData.isPrimary || locationData.is_default || false,
+        metadata: locationData.metadata || {}
+      })
+      .select()
+      .single();
 
-    const location = {
-      id: locationId,
-      userId: user.id,
-      name: locationData.name,
-      address: locationData.address,
-      isPrimary: locationData.isPrimary || false,
-      createdAt: new Date().toISOString(),
-    };
+    if (error) {
+      console.log('❌ Error adding location:', error);
+      return c.json({ error: 'Failed to add location' }, 500);
+    }
 
-    await kv.set(`location:${locationId}`, location);
-    await kv.set(`client_location:${user.id}:${locationId}`, locationId);
-
-    return c.json({ success: true, location });
+    console.log('✅ Location added to database');
+    return c.json({ success: true, location: newLocation });
   } catch (error) {
     console.log('Error adding location:', error);
     return c.json({ error: 'Failed to add location' }, 500);
@@ -644,21 +733,34 @@ app.put('/make-server-de4eab6a/client/locations/:locationId', async (c) => {
 
     const locationId = c.req.param('locationId');
     const locationData = await c.req.json();
-    const location = await kv.get(`location:${locationId}`);
+    
+    // Update location in SQL table
+    const { data: updatedLocation, error } = await supabaseAdmin
+      .from('client_locations')
+      .update({
+        label: locationData.name || locationData.label,
+        address: typeof locationData.address === 'string' 
+          ? { street: locationData.address } 
+          : locationData.address,
+        is_default: locationData.isPrimary || locationData.is_default,
+        metadata: locationData.metadata || {},
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', locationId)
+      .eq('client_id', user.id)
+      .select()
+      .single();
 
-    if (!location || location.userId !== user.id) {
+    if (error) {
+      console.log('❌ Error updating location:', error);
+      return c.json({ error: 'Failed to update location' }, 500);
+    }
+
+    if (!updatedLocation) {
       return c.json({ error: 'Location not found' }, 404);
     }
 
-    const updatedLocation = {
-      ...location,
-      name: locationData.name,
-      address: locationData.address,
-      isPrimary: locationData.isPrimary,
-      updatedAt: new Date().toISOString(),
-    };
-
-    await kv.set(`location:${locationId}`, updatedLocation);
+    console.log('✅ Location updated in database');
     return c.json({ success: true, location: updatedLocation });
   } catch (error) {
     console.log('Error updating location:', error);
@@ -673,15 +775,20 @@ app.delete('/make-server-de4eab6a/client/locations/:locationId', async (c) => {
     if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
     const locationId = c.req.param('locationId');
-    const location = await kv.get(`location:${locationId}`);
+    
+    // Delete location from SQL table
+    const { error } = await supabaseAdmin
+      .from('client_locations')
+      .delete()
+      .eq('id', locationId)
+      .eq('client_id', user.id);
 
-    if (!location || location.userId !== user.id) {
-      return c.json({ error: 'Location not found' }, 404);
+    if (error) {
+      console.log('❌ Error deleting location:', error);
+      return c.json({ error: 'Failed to delete location' }, 500);
     }
 
-    await kv.del(`location:${locationId}`);
-    await kv.del(`client_location:${user.id}:${locationId}`);
-
+    console.log('✅ Location deleted from database');
     return c.json({ success: true });
   } catch (error) {
     console.log('Error deleting location:', error);
@@ -696,25 +803,33 @@ app.post('/make-server-de4eab6a/client/family-members', async (c) => {
     if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
     const memberData = await c.req.json();
-    const memberId = `fam_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Insert family member into SQL table
+    const { data: newMember, error } = await supabaseAdmin
+      .from('family_members')
+      .insert({
+        client_id: user.id,
+        name: memberData.name,
+        relation: memberData.relationship || memberData.relation,
+        phone: memberData.phone,
+        dob: memberData.dob || null,
+        metadata: {
+          age: memberData.age,
+          gender: memberData.gender,
+          address: memberData.address,
+          notes: memberData.notes || ''
+        }
+      })
+      .select()
+      .single();
 
-    const familyMember = {
-      id: memberId,
-      userId: user.id,
-      name: memberData.name,
-      relationship: memberData.relationship,
-      phone: memberData.phone,
-      age: memberData.age,
-      gender: memberData.gender,
-      address: memberData.address,
-      notes: memberData.notes || '',
-      createdAt: new Date().toISOString(),
-    };
+    if (error) {
+      console.log('❌ Error adding family member:', error);
+      return c.json({ error: 'Failed to add family member' }, 500);
+    }
 
-    await kv.set(`family:${memberId}`, familyMember);
-    await kv.set(`client_family:${user.id}:${memberId}`, memberId);
-
-    return c.json({ success: true, familyMember });
+    console.log('✅ Family member added to database');
+    return c.json({ success: true, familyMember: newMember });
   } catch (error) {
     console.log('Error adding family member:', error);
     return c.json({ error: 'Failed to add family member' }, 500);
@@ -762,15 +877,20 @@ app.delete('/make-server-de4eab6a/client/family-members/:memberId', async (c) =>
     if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
     const memberId = c.req.param('memberId');
-    const familyMember = await kv.get(`family:${memberId}`);
+    
+    // Delete family member from SQL table
+    const { error } = await supabaseAdmin
+      .from('family_members')
+      .delete()
+      .eq('id', memberId)
+      .eq('client_id', user.id);
 
-    if (!familyMember || familyMember.userId !== user.id) {
-      return c.json({ error: 'Family member not found' }, 404);
+    if (error) {
+      console.log('❌ Error deleting family member:', error);
+      return c.json({ error: 'Failed to delete family member' }, 500);
     }
 
-    await kv.del(`family:${memberId}`);
-    await kv.del(`client_family:${user.id}:${memberId}`);
-
+    console.log('✅ Family member deleted from database');
     return c.json({ success: true });
   } catch (error) {
     console.log('Error deleting family member:', error);
@@ -788,36 +908,35 @@ app.get('/make-server-de4eab6a/client/favorites', async (c) => {
 
     console.log(`Fetching favorites for client ${user.id}`);
     
-    const clientData = await kv.get(`user:${user.id}`);
-    if (!clientData) {
-      return c.json({ error: 'Client not found' }, 404);
+    // Get favorites from SQL database
+    const { data: favorites, error } = await supabaseAdmin
+      .from('favorites')
+      .select('provider_id, created_at')
+      .eq('client_id', user.id);
+
+    if (error) {
+      console.log('❌ Error fetching favorites:', error);
+      return c.json({ error: 'Failed to fetch favorites' }, 500);
     }
 
-    const favoriteProviderIds = clientData.favorites || [];
-    console.log(`Client has ${favoriteProviderIds.length} favorites`);
+    console.log(`✅ Client has ${favorites?.length || 0} favorites in SQL database`);
 
-    // Fetch provider details for each favorite
-    const allRequests = await kv.getByPrefix('request:');
-    const allServices = await kv.getByPrefix('service:');
-    
-    const favoriteProviders = await Promise.all(
-      favoriteProviderIds.map(async (providerId: string) => {
-        const provider = await kv.get(`user:${providerId}`);
-        if (!provider) return null;
+    // For now, return just the provider IDs
+    // TODO: Enhance with provider details when provider data is migrated to SQL
+    const favoriteProviders = favorites?.map(f => ({
+      provider_id: f.provider_id,
+      created_at: f.created_at
+    })) || [];
 
-        // Calculate average rating and review count from requests
-        const providerRequests = allRequests.filter((r: any) => 
-          r.providerId === providerId && (r.userRating || r.rating) && !r.reviewHidden
-        );
-        
-        const reviewCount = providerRequests.length;
-        const averageRating = reviewCount > 0 
-          ? providerRequests.reduce((sum: number, r: any) => sum + (r.userRating || r.rating), 0) / reviewCount 
-          : 0;
-
-        console.log(`Provider ${providerId} has ${reviewCount} reviews with average rating ${averageRating}`);
-
-        // Resolve specialty - check if it's a service ID
+    return c.json({ 
+      favorites: favoriteProviders,
+      count: favoriteProviders.length 
+    });
+  } catch (error) {
+    console.log('Error fetching favorites:', error);
+    return c.json({ error: 'Failed to fetch favorites' }, 500);
+  }
+});
         let specialtyName = provider.specialty;
         if (provider.specialty) {
           const service = allServices.find((s: any) => s.id === provider.specialty);
@@ -838,31 +957,6 @@ app.get('/make-server-de4eab6a/client/favorites', async (c) => {
         return {
           id: provider.id,
           name: provider.name,
-          email: provider.email,
-          phone: provider.phone,
-          specialty: specialtyName || provider.specialty || 'General Service',
-          skills: resolvedSkills,
-          primaryService: specialtyName || provider.specialty || 'General Service',
-          rating: reviewCount > 0 ? Math.round(averageRating * 10) / 10 : 0,
-          reviewCount,
-          available: provider.available || false,
-          hourlyRate: provider.hourlyRate || 0,
-          gender: provider.gender,
-          languages: provider.languages || [],
-        };
-      })
-    );
-
-    const validFavorites = favoriteProviders.filter(Boolean);
-    console.log(`Returning ${validFavorites.length} favorite providers`);
-    
-    return c.json({ favorites: validFavorites });
-  } catch (error) {
-    console.log('Error fetching favorites:', error);
-    return c.json({ error: 'Failed to fetch favorites', details: error?.message }, 500);
-  }
-});
-
 // Add provider to favorites
 app.post('/make-server-de4eab6a/client/favorites/add', async (c) => {
   try {
@@ -870,31 +964,33 @@ app.post('/make-server-de4eab6a/client/favorites/add', async (c) => {
     if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
     const { providerId } = await c.req.json();
-    
+
     if (!providerId) {
       return c.json({ error: 'Provider ID is required' }, 400);
     }
 
     console.log(`Adding provider ${providerId} to favorites for client ${user.id}`);
     
-    // Verify provider exists
-    const provider = await kv.get(`user:${providerId}`);
-    if (!provider || provider.role !== 'provider') {
-      return c.json({ error: 'Provider not found' }, 404);
+    // Insert favorite into SQL table (using upsert to handle duplicates)
+    const { data, error } = await supabaseAdmin
+      .from('favorites')
+      .insert({
+        client_id: user.id,
+        provider_id: providerId
+      })
+      .select()
+      .single();
+
+    if (error) {
+      if (error.code === '23505') { // Unique constraint violation
+        return c.json({ error: 'Provider already in favorites' }, 400);
+      }
+      console.log('❌ Error adding favorite:', error);
+      return c.json({ error: 'Failed to add favorite' }, 500);
     }
 
-    const clientData = await kv.get(`user:${user.id}`);
-    if (!clientData) {
-      return c.json({ error: 'Client not found' }, 404);
-    }
-
-    const favorites = clientData.favorites || [];
-    
-    if (favorites.includes(providerId)) {
-      return c.json({ error: 'Provider already in favorites' }, 400);
-    }
-
-    favorites.push(providerId);
+    console.log('✅ Provider added to favorites in database');
+    return c.json({ success: true, favorite: data });    favorites.push(providerId);
     await kv.set(`user:${user.id}`, { ...clientData, favorites });
 
     console.log(`✅ Provider ${providerId} added to favorites for client ${user.id}`);
@@ -919,19 +1015,20 @@ app.post('/make-server-de4eab6a/client/favorites/remove', async (c) => {
 
     console.log(`Removing provider ${providerId} from favorites for client ${user.id}`);
     
-    const clientData = await kv.get(`user:${user.id}`);
-    if (!clientData) {
-      return c.json({ error: 'Client not found' }, 404);
+    // Remove favorite from SQL table
+    const { error } = await supabaseAdmin
+      .from('favorites')
+      .delete()
+      .eq('client_id', user.id)
+      .eq('provider_id', providerId);
+
+    if (error) {
+      console.log('❌ Error removing favorite:', error);
+      return c.json({ error: 'Failed to remove favorite' }, 500);
     }
 
-    const favorites = clientData.favorites || [];
-    const newFavorites = favorites.filter((id: string) => id !== providerId);
-    
-    if (favorites.length === newFavorites.length) {
-      return c.json({ error: 'Provider not in favorites' }, 400);
-    }
-
-    await kv.set(`user:${user.id}`, { ...clientData, favorites: newFavorites });
+    console.log('✅ Provider removed from favorites in database');
+    return c.json({ success: true });
 
     console.log(`✅ Provider ${providerId} removed from favorites for client ${user.id}`);
     return c.json({ success: true, message: 'Provider removed from favorites' });

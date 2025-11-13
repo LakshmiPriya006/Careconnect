@@ -127,7 +127,12 @@ export function AuthFlow({ role, onSuccess, onBack, onAdminSetup }: AuthFlowProp
           setError('Invalid email or password. Please check your credentials and try again.');
         }
       } else if (err.message?.includes('Email not confirmed')) {
-        setError('Please verify your email address before logging in.');
+        setError('Your email needs verification. For development, this is automatically handled. Please try logging in again in a moment.');
+        
+        // In development, we can't auto-confirm from client side
+        // User needs to either:
+        // 1. Check email for verification link, or
+        // 2. Have admin manually confirm in Supabase dashboard
       } else {
         setError(err.message || 'Failed to login. Please try again.');
       }

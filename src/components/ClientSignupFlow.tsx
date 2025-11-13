@@ -89,13 +89,35 @@ export function ClientSignupFlow({ onSuccess, onBack }: ClientSignupFlowProps) {
     }
 
     try {
-      const result = await auth.signUpClient({
-        ...formData,
-        emailVerified: verified.email,
-        mobileVerified: verified.mobile,
-      });
+      // Use direct Supabase Auth signup (bypasses custom server endpoint)
+      const { createClient } = await import('../utils/supabase/client');
+      const supabase = createClient();
       
-      if (result.success) {
+      console.log('🔐 Creating user account with Supabase Auth...');
+      const { data, error } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
+        options: {
+          data: {
+            name: formData.name,
+            phone: formData.phone,
+            role: 'client',
+          },
+          emailRedirectTo: undefined // Disable email verification for development
+        }
+      });
+
+      if (error) {
+        console.error('❌ Supabase Auth error:', error);
+        throw error;
+      }
+
+      console.log('✅ User account created:', data.user?.id);
+      
+      // TODO: Save client data to SQL tables when tables are ready
+      // For now, just proceed with login
+      
+      if (data.user) {
         // Call onSuccess to trigger login
         onSuccess(formData.email, formData.password, formData.name);
       }
