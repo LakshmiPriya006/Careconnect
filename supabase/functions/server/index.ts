@@ -7,7 +7,12 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 const app = new Hono();
 
 // Middleware
-app.use('*', cors());
+// Enable CORS for all routes and ensure preflight responses include required headers
+app.use('*', cors({
+  origin: '*',
+  allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowHeaders: ['Content-Type', 'Authorization', 'apikey', 'x-client-info'],
+}));
 app.use('*', logger(console.log));
 
 // Initialize Supabase client
@@ -594,4 +599,4 @@ app.onError((err: any, c: any) => {
   return c.json({ error: 'Internal server error' }, 500);
 });
 
-export default app;
+export default app.fetch;

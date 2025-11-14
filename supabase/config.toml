@@ -2,6 +2,4 @@
 project_id = "zypsbvzpbypsaazinoqe"
 
 [functions.server]
-  # This is the CRITICAL line that fixes your error.
-  # It tells the CLI that your main file is "index.ts".
   entrypoint = "functions/server/index.ts"
