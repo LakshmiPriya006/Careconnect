@@ -6,7 +6,7 @@ import { Badge } from './ui/badge';
 import { useLocation } from '../hooks/useLocation';
 import { calculateDistance, formatDistance } from '../utils/geolocation';
 import { provider as providerApi } from '../utils/api';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 import { TrackingMap } from './TrackingMap';
 
 interface LocationTrackerProps {

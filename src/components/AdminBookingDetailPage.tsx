@@ -9,7 +9,7 @@ import { Label } from './ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { CurrencyIcon } from './CurrencyIcon';
 import { admin } from '../utils/api';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 import { useCurrency } from '../utils/currency';
 
 interface AdminBookingDetailPageProps {

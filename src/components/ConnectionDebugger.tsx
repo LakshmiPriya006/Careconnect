@@ -24,7 +24,7 @@ export function ConnectionDebugger() {
       
       try {
         const healthResponse = await fetch(
-          `https://${projectId}.supabase.co/functions/v1/make-server-de4eab6a/health`,
+          `https://${projectId}.supabase.co/functions/v1/server/health`,
           {
             method: 'GET',
             headers: {
@@ -53,7 +53,7 @@ export function ConnectionDebugger() {
       
       try {
         const servicesResponse = await fetch(
-          `https://${projectId}.supabase.co/functions/v1/make-server-de4eab6a/services`,
+          `https://${projectId}.supabase.co/functions/v1/server/services`,
           {
             method: 'GET',
             headers: {
@@ -85,7 +85,7 @@ export function ConnectionDebugger() {
       
       try {
         const checkAdminResponse = await fetch(
-          `https://${projectId}.supabase.co/functions/v1/make-server-de4eab6a/auth/check-admin`,
+          `https://${projectId}.supabase.co/functions/v1/server/auth/check-admin`,
           {
             method: 'GET',
             headers: {
@@ -112,7 +112,7 @@ export function ConnectionDebugger() {
       logs.push('');
       logs.push('=== SUMMARY ===');
       logs.push(`Project ID: ${projectId}`);
-      logs.push(`Server URL: https://${projectId}.supabase.co/functions/v1/make-server-de4eab6a`);
+      logs.push(`Server URL: https://${projectId}.supabase.co/functions/v1/server`);
       logs.push('');
       logs.push('If server is offline, it may need to be deployed.');
       logs.push('If you see CORS errors, check browser console for details.');

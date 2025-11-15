@@ -10,7 +10,7 @@ import { Textarea } from './ui/textarea';
 import { CurrencyIcon } from './CurrencyIcon';
 import { RazorpayPayment } from './RazorpayPayment';
 import { client } from '../utils/api';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 import { useCurrency } from '../utils/currency';
 import * as Icons from 'lucide-react';
 

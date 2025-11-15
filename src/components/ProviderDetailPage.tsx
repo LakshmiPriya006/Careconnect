@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Alert, AlertDescription } from './ui/alert';
 import { AdminVerificationReview } from './AdminVerificationReview';
 import { client, admin } from '../utils/api';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 import { useCurrency } from '../utils/currency';
 
 interface ProviderDetailPageProps {

@@ -19,7 +19,7 @@ import { CreateAdminForm } from './CreateAdminForm';
 import { AdminBookServiceForm } from './AdminBookServiceForm';
 import { EmergencyAlerts } from './EmergencyAlerts';
 import { admin, client as apiClient } from '../utils/api';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 import { useCurrency } from '../utils/currency';
 
 interface AdminDashboardProps {

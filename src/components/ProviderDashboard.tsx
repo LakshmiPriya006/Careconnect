@@ -12,7 +12,7 @@ import { ProviderJobManagement } from './ProviderJobManagement';
 import { ProviderEarnings } from './ProviderEarnings';
 import { ProviderWallet } from './ProviderWallet';
 import { client, provider } from '../utils/api';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 import { useCurrency } from '../utils/currency';
 
 interface ProviderDashboardProps {

@@ -237,6 +237,38 @@ app.get('/client/profile', async (c) => {
   }
 });
 
+app.get('/client/locations', async (c: any) => {
+  const user = await verifyUser(c.req.header('Authorization'));
+  if (!user) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+
+  try {
+    const clientId = await getClientId(user.id);
+    if (!clientId) {
+      return c.json({ error: 'Client not found' }, 404);
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('client_locations')
+      .select('*')
+      .eq('client_id', clientId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.log('❌ [LOCATIONS] Error fetching locations:', error);
+      return c.json({ error: 'Failed to fetch locations' }, 500);
+    }
+
+    console.log(`✅ [LOCATIONS] Retrieved locations for: ${user.email}`);
+    return c.json({ success: true, locations: data || [] });
+
+  } catch (error) {
+    console.log('❌ [LOCATIONS] Unexpected error:', error);
+    return c.json({ error: 'Failed to fetch locations' }, 500);
+  }
+});
+
 // Add client location - SQL version
 app.post('/client/locations', async (c) => {
   const user = await verifyUser(c.req.header('Authorization'));

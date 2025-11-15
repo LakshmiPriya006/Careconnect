@@ -204,7 +204,7 @@ export function ApiConnectionTest() {
                     <div className="font-semibold text-orange-900">Troubleshooting Steps:</div>
                     <ul className="text-sm text-orange-800 space-y-1 list-disc list-inside">
                       <li>Check if the Supabase Edge Function is deployed</li>
-                      <li>Verify the function name is "make-server-de4eab6a"</li>
+                      <li>Verify the function name is "server"</li>
                       <li>Ensure CORS is enabled on the server</li>
                       <li>Check browser console for detailed error messages</li>
                       <li>Verify project ID and anon key are correct</li>

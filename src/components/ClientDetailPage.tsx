@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { AdminBookServiceForm } from './AdminBookServiceForm';
 import { AdminBookingDetailPage } from './AdminBookingDetailPage';
 import { admin } from '../utils/api';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 import { useCurrency } from '../utils/currency';
 
 interface ClientDetailPageProps {
